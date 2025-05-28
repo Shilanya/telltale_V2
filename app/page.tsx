@@ -1,22 +1,43 @@
 "use client"
 
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { PlusCircle, Users } from "lucide-react"
+import { PlusCircle, Users, Loader2 } from "lucide-react"
 import StoryList from "@/components/story-list"
 import { useStore } from "@/lib/store"
 import { useAuth } from "@/lib/auth"
 
 export default function Home() {
+  const router = useRouter()
+  const { user, isLoading: authLoading } = useAuth()
   const { stories, loading } = useStore()
-  const { user } = useAuth()
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push("/login")
+    }
+  }, [user, authLoading, router])
+
+  if (authLoading) {
+    return (
+      <div className="container mx-auto py-8 px-4 flex justify-center items-center min-h-[50vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return null
+  }
 
   return (
     <main className="container mx-auto py-8 px-4">
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-3xl font-bold">Tell-Tale</h1>
-          <p className="text-muted-foreground mt-1">Welcome back, {user?.name}! Ready to share your stories?</p>
+          <h1 className="text-3xl font-bold">Welcome back, {user.name}!</h1>
+          <p className="text-muted-foreground">Continue your storytelling journey</p>
         </div>
         <div className="flex gap-2">
           <Link href="/characters">
@@ -35,10 +56,10 @@ export default function Home() {
       </div>
 
       <div className="mb-6">
-        <h2 className="text-2xl font-semibold mb-4">Recent Stories</h2>
+        <h2 className="text-2xl font-semibold mb-4">Your Stories</h2>
         {loading ? (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">Loading stories...</p>
+          <div className="flex justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : (
           <StoryList stories={stories} />

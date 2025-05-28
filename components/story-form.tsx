@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ImagePlus, Loader2 } from "lucide-react"
 import { useStore } from "@/lib/store"
-import { generateExcerpt } from "@/lib/utils"
+import { generateId, generateExcerpt } from "@/lib/utils"
 import type { Story, Chapter } from "@/lib/types"
 import { useNotification, Notification } from "@/components/notification"
 import StoryCharacters from "@/components/story-characters"
@@ -72,28 +72,45 @@ export default function StoryForm({ story }: { story?: Story }) {
         })
       }
 
+      const now = new Date().toISOString()
+
       // Use content from chapters if available, otherwise use the main content
       const finalContent =
         chapters.length > 0
           ? chapters
               .sort((a, b) => a.order - b.order)
-              .map((ch) => `# ${ch.title}\n\n${ch.content}`)
+              .map((ch) => ch.content) // Just use content, not formatted with title
               .join("\n\n")
           : content
 
-      const storyData = {
-        title,
-        description,
-        content: finalContent,
-        excerpt: generateExcerpt(description || finalContent),
-        cover_image: imageUrl,
-        characters: characterIds,
-        chapters,
-      }
-
       if (story) {
         // Update existing story
-        await updateStoreStory(story.id, storyData)
+        const updatedStory: Story = {
+          ...story,
+          title,
+          description,
+          content: finalContent,
+          excerpt: generateExcerpt(description || finalContent),
+          coverImage: imageUrl,
+          characters: characterIds,
+          chapters,
+          updatedAt: now,
+        }
+
+        // Update in store
+        updateStoreStory(story.id, updatedStory)
+
+        // Also try to update via API
+        try {
+          await fetch(`/api/stories/${story.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updatedStory),
+          })
+        } catch (apiError) {
+          console.error("API update failed, but story was updated locally:", apiError)
+        }
+
         showSuccess("Story updated successfully!")
 
         // Navigate to the story page
@@ -102,10 +119,36 @@ export default function StoryForm({ story }: { story?: Story }) {
         }, 500)
       } else {
         // Create new story
-        await addStory(storyData)
+        const newStory: Story = {
+          id: generateId(),
+          title,
+          description,
+          content: finalContent,
+          excerpt: generateExcerpt(description || finalContent),
+          coverImage: imageUrl,
+          characters: characterIds,
+          chapters,
+          createdAt: now,
+          updatedAt: now,
+        }
+
+        // Add to store
+        addStory(newStory)
+
+        // Also try to create via API
+        try {
+          await fetch("/api/stories", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newStory),
+          })
+        } catch (apiError) {
+          console.error("API creation failed, but story was created locally:", apiError)
+        }
+
         showSuccess("Story created successfully!")
 
-        // Navigate to the homepage after a short delay
+        // Navigate to the homepage after a short delay to allow the store to update
         setTimeout(() => {
           router.push("/")
         }, 500)
@@ -180,32 +223,30 @@ export default function StoryForm({ story }: { story?: Story }) {
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="content" type="button">
-                Story Content
-              </TabsTrigger>
-              <TabsTrigger value="chapters" type="button">
-                Chapters
-              </TabsTrigger>
-              <TabsTrigger value="characters" type="button">
-                Characters
-              </TabsTrigger>
+              <TabsTrigger value="content">Story Content</TabsTrigger>
+              <TabsTrigger value="chapters">Chapters</TabsTrigger>
+              <TabsTrigger value="characters">Characters</TabsTrigger>
             </TabsList>
 
             <TabsContent value="content" className="pt-4">
               <div className="space-y-2">
-                <Label htmlFor="content">Content</Label>
+                <Label htmlFor="content">Story Content</Label>
                 <Textarea
                   id="content"
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
-                  placeholder="Write your story here..."
+                  placeholder={chapters.length > 0 ? "Content is managed through chapters" : "Write your story here..."}
                   className="min-h-[300px]"
                   disabled={chapters.length > 0}
                 />
-                {chapters.length > 0 && (
-                  <p className="text-sm text-amber-500">
-                    You are using chapters. This main content area is disabled. Your content will be compiled from your
-                    chapters.
+                {chapters.length > 0 ? (
+                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                    ✨ You are using chapters to organize your story. The main content will be automatically compiled
+                    from your chapters when you save.
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Write your story content here, or switch to the Chapters tab to organize your story into sections.
                   </p>
                 )}
               </div>

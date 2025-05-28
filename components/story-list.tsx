@@ -49,9 +49,7 @@ export default function StoryList({ stories }: { stories: Story[] }) {
               )}
             </CardContent>
             <CardFooter className="flex justify-between">
-              <span className="text-xs text-muted-foreground">
-                {formatDate(story.created_at || story.createdAt || "")}
-              </span>
+              <span className="text-xs text-muted-foreground">{formatDate(story.createdAt)}</span>
               <span className="text-sm font-medium hover:underline">Read more</span>
             </CardFooter>
           </Card>

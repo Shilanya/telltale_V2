@@ -5,19 +5,14 @@ import { Button } from "@/components/ui/button"
 import { PlusCircle, Loader2 } from "lucide-react"
 import CharacterList from "@/components/character-list"
 import { useStore } from "@/lib/store"
-import { useAuth } from "@/lib/auth"
 
 export default function CharactersPage() {
   const { characters, loading } = useStore()
-  const { user } = useAuth()
 
   return (
     <main className="container mx-auto py-8 px-4">
       <div className="flex justify-between items-center mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Characters</h1>
-          <p className="text-muted-foreground mt-1">Manage your character collection, {user?.name}</p>
-        </div>
+        <h1 className="text-3xl font-bold">Characters</h1>
         <Link href="/characters/create">
           <Button>
             <PlusCircle className="mr-2 h-4 w-4" />

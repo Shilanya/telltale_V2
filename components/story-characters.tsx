@@ -60,7 +60,7 @@ export default function StoryCharacters({ characterIds, onCharactersChange }: St
         <div className="flex gap-2">
           <Dialog open={isAddingCharacter} onOpenChange={setIsAddingCharacter}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm" disabled={availableCharacters.length === 0} type="button">
+              <Button variant="outline" size="sm" disabled={availableCharacters.length === 0}>
                 <UserPlus className="h-4 w-4 mr-2" />
                 Add Existing Character
               </Button>
@@ -103,9 +103,7 @@ export default function StoryCharacters({ characterIds, onCharactersChange }: St
               </div>
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button variant="outline" type="button">
-                    Cancel
-                  </Button>
+                  <Button variant="outline">Cancel</Button>
                 </DialogClose>
               </DialogFooter>
             </DialogContent>
@@ -113,7 +111,7 @@ export default function StoryCharacters({ characterIds, onCharactersChange }: St
 
           <Dialog open={isCreatingCharacter} onOpenChange={setIsCreatingCharacter}>
             <DialogTrigger asChild>
-              <Button variant="default" size="sm" type="button">
+              <Button variant="default" size="sm">
                 <PlusCircle className="h-4 w-4 mr-2" />
                 Create New Character
               </Button>
@@ -147,7 +145,6 @@ export default function StoryCharacters({ characterIds, onCharactersChange }: St
                   <div className="flex justify-between items-start">
                     <h4 className="font-medium">{character.name}</h4>
                     <button
-                      type="button"
                       onClick={() => handleRemoveCharacter(character.id)}
                       className="text-muted-foreground hover:text-destructive"
                       title="Remove from story"

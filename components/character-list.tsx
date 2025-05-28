@@ -52,9 +52,7 @@ export default function CharacterList({ characters }: { characters: Character[] 
               </div>
             </CardContent>
             <CardFooter className="flex justify-between">
-              <span className="text-xs text-muted-foreground">
-                {formatDate(character.created_at || character.createdAt || "")}
-              </span>
+              <span className="text-xs text-muted-foreground">{formatDate(character.createdAt)}</span>
               <span className="text-sm font-medium hover:underline">View details</span>
             </CardFooter>
           </Card>

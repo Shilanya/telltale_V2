@@ -5,26 +5,12 @@ import { notFound, useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Edit, Loader2, Users, BookOpen, EyeOff, RotateCcw, Settings } from "lucide-react"
+import { Edit, Loader2, Users, BookOpen } from "lucide-react"
 import { useStore } from "@/lib/store"
 import DeleteStoryButton from "@/components/delete-story-button"
 import { formatDate } from "@/lib/utils"
 import type { Story, Character } from "@/lib/types"
-import ReadingPreferences from "@/components/reading-preferences"
-
-interface ReadingSettings {
-  fontSize: string
-  fontFamily: string
-  lineHeight: string
-  textAlign: string
-}
-
-const defaultReadingSettings: ReadingSettings = {
-  fontSize: "18px",
-  fontFamily: "Inter, system-ui, sans-serif",
-  lineHeight: "1.7",
-  textAlign: "left",
-}
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function StoryPage({ params }: { params: { id: string } }) {
   const router = useRouter()
@@ -32,51 +18,7 @@ export default function StoryPage({ params }: { params: { id: string } }) {
   const [story, setStory] = useState<Story | undefined>()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [previewingChapter, setPreviewingChapter] = useState<string | null>(null)
-  const [readChapters, setReadChapters] = useState<Set<string>>(new Set())
-  const [showReadingPreferences, setShowReadingPreferences] = useState(false)
-  const [readingSettings, setReadingSettings] = useState<ReadingSettings>(defaultReadingSettings)
-
-  // Load read chapters from localStorage
-  useEffect(() => {
-    const savedReadChapters = localStorage.getItem(`read-chapters-${params.id}`)
-    if (savedReadChapters) {
-      try {
-        const parsedChapters = JSON.parse(savedReadChapters)
-        setReadChapters(new Set(parsedChapters))
-      } catch (error) {
-        console.error("Error loading read chapters:", error)
-      }
-    }
-  }, [params.id])
-
-  // Load reading preferences from localStorage
-  useEffect(() => {
-    const savedSettings = localStorage.getItem("reading-preferences")
-    if (savedSettings) {
-      try {
-        const parsedSettings = JSON.parse(savedSettings)
-        setReadingSettings({ ...defaultReadingSettings, ...parsedSettings })
-      } catch (error) {
-        console.error("Error loading reading preferences:", error)
-      }
-    }
-  }, [])
-
-  // Save reading preferences to localStorage
-  const updateReadingSettings = (newSettings: Partial<ReadingSettings>) => {
-    const updatedSettings = { ...readingSettings, ...newSettings }
-    setReadingSettings(updatedSettings)
-    localStorage.setItem("reading-preferences", JSON.stringify(updatedSettings))
-  }
-
-  // Save read chapters to localStorage
-  const markChapterAsRead = (chapterId: string) => {
-    const newReadChapters = new Set(readChapters)
-    newReadChapters.add(chapterId)
-    setReadChapters(newReadChapters)
-    localStorage.setItem(`read-chapters-${params.id}`, JSON.stringify(Array.from(newReadChapters)))
-  }
+  const [activeTab, setActiveTab] = useState<string>("all")
 
   useEffect(() => {
     const loadStory = async () => {
@@ -167,22 +109,8 @@ export default function StoryPage({ params }: { params: { id: string } }) {
   // Sort chapters by order
   const sortedChapters = [...(story.chapters || [])].sort((a, b) => a.order - b.order)
 
-  const toggleChapterPreview = (chapterId: string) => {
-    if (previewingChapter === chapterId) {
-      setPreviewingChapter(null)
-    } else {
-      setPreviewingChapter(chapterId)
-      markChapterAsRead(chapterId)
-    }
-  }
-
-  // Create dynamic styles for reading content
-  const readingContentStyle = {
-    fontSize: readingSettings.fontSize,
-    fontFamily: readingSettings.fontFamily,
-    lineHeight: readingSettings.lineHeight,
-    textAlign: readingSettings.textAlign as "left" | "center" | "right" | "justify",
-  }
+  // Determine if we should show tabs (only if there are chapters)
+  const showTabs = sortedChapters.length > 0
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -191,14 +119,6 @@ export default function StoryPage({ params }: { params: { id: string } }) {
           <Button variant="outline">Back to Stories</Button>
         </Link>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setShowReadingPreferences(true)}
-            title="Reading Preferences"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
           <Link href={`/edit/${story.id}`}>
             <Button variant="outline" size="icon">
               <Edit className="h-4 w-4" />
@@ -211,9 +131,8 @@ export default function StoryPage({ params }: { params: { id: string } }) {
       <div className="max-w-3xl mx-auto">
         <h1 className="text-4xl font-bold mb-4">{story.title}</h1>
         <p className="text-muted-foreground mb-6">
-          Created on {formatDate(story.created_at || story.createdAt || "")}
-          {(story.updated_at || story.updatedAt) !== (story.created_at || story.createdAt) &&
-            ` • Updated on ${formatDate(story.updated_at || story.updatedAt || "")}`}
+          Created on {formatDate(story.createdAt)}
+          {story.updatedAt !== story.createdAt && ` • Updated on ${formatDate(story.updatedAt)}`}
         </p>
 
         {story.coverImage && (
@@ -264,72 +183,57 @@ export default function StoryPage({ params }: { params: { id: string } }) {
           </div>
         )}
 
-        {/* Story Content */}
-        <div className="prose prose-lg dark:prose-invert max-w-none">
-          {sortedChapters.length > 0 ? (
-            <div className="space-y-6">
+        {showTabs ? (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mb-8">
+            <TabsList className="w-full flex">
+              <TabsTrigger value="all" className="flex-1">
+                Full Story
+              </TabsTrigger>
               {sortedChapters.map((chapter, index) => (
-                <div key={chapter.id} className="border rounded-lg p-6 bg-card">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-2xl font-bold flex items-center">
+                <TabsTrigger key={chapter.id} value={chapter.id} className="flex-1">
+                  Ch. {index + 1}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            <TabsContent value="all" className="pt-6">
+              <div className="prose prose-lg dark:prose-invert max-w-none">
+                {sortedChapters.map((chapter, index) => (
+                  <div key={chapter.id} className="mb-8">
+                    <h2 className="text-2xl font-bold mb-4 flex items-center">
                       <BookOpen className="h-5 w-5 mr-2" />
                       Chapter {index + 1}: {chapter.title}
                     </h2>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => toggleChapterPreview(chapter.id)}
-                      className="flex items-center gap-2"
-                    >
-                      {previewingChapter === chapter.id ? (
-                        <>
-                          <EyeOff className="h-4 w-4" />
-                          Hide
-                        </>
-                      ) : readChapters.has(chapter.id) ? (
-                        <>
-                          <RotateCcw className="h-4 w-4" />
-                          Recall
-                        </>
-                      ) : (
-                        <>
-                          <BookOpen className="h-4 w-4" />
-                          Read Now
-                        </>
-                      )}
-                    </Button>
+                    {chapter.content.split("\n").map((paragraph, idx) => (
+                      <p key={idx}>{paragraph}</p>
+                    ))}
                   </div>
+                ))}
+              </div>
+            </TabsContent>
 
-                  {previewingChapter === chapter.id && (
-                    <div
-                      className="prose prose-lg dark:prose-invert max-w-none reading-content"
-                      style={readingContentStyle}
-                    >
-                      {chapter.content.split("\n").map((paragraph, idx) => (
-                        <p key={idx}>{paragraph}</p>
-                      ))}
-                    </div>
-                  )}
+            {sortedChapters.map((chapter, index) => (
+              <TabsContent key={chapter.id} value={chapter.id} className="pt-6">
+                <div className="prose prose-lg dark:prose-invert max-w-none">
+                  <h2 className="text-2xl font-bold mb-4 flex items-center">
+                    <BookOpen className="h-5 w-5 mr-2" />
+                    Chapter {index + 1}: {chapter.title}
+                  </h2>
+                  {chapter.content.split("\n").map((paragraph, idx) => (
+                    <p key={idx}>{paragraph}</p>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : (
-            // Show regular content if no chapters
-            <div className="reading-content" style={readingContentStyle}>
-              {story.content.split("\n").map((paragraph, index) => (
-                <p key={index}>{paragraph}</p>
-              ))}
-            </div>
-          )}
-        </div>
+              </TabsContent>
+            ))}
+          </Tabs>
+        ) : (
+          <div className="prose prose-lg dark:prose-invert max-w-none">
+            {story.content.split("\n").map((paragraph, index) => (
+              <p key={index}>{paragraph}</p>
+            ))}
+          </div>
+        )}
       </div>
-
-      <ReadingPreferences
-        isOpen={showReadingPreferences}
-        onClose={() => setShowReadingPreferences(false)}
-        settings={readingSettings}
-        onSettingsChange={updateReadingSettings}
-      />
     </div>
   )
 }
