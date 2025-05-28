@@ -3,29 +3,48 @@ export interface Chapter {
   title: string
   content: string
   order: number
+  story_id: string
+  created_at: string
+  updated_at: string
 }
 
 export interface Story {
   id: string
   title: string
-  description: string // New field for story description/preview
+  description: string
   content: string
   excerpt: string
-  coverImage: string | null
+  cover_image: string | null
+  coverImage?: string | null // For backward compatibility
+  user_id: string
   characters: string[] // Array of character IDs associated with this story
-  chapters: Chapter[] // New field for story chapters
-  createdAt: string
-  updatedAt: string
+  chapters: Chapter[] // Story chapters
+  created_at: string
+  updated_at: string
+  createdAt?: string // For backward compatibility
+  updatedAt?: string // For backward compatibility
 }
 
 export interface Character {
   id: string
   name: string
   origin: string
-  birthDate: string
+  birth_date: string
+  birthDate?: string // For backward compatibility
   backstory: string
   traits: string[]
   image: string | null
-  createdAt: string
-  updatedAt: string
+  user_id: string
+  created_at: string
+  updated_at: string
+  createdAt?: string // For backward compatibility
+  updatedAt?: string // For backward compatibility
+}
+
+export interface User {
+  id: string
+  email: string
+  name: string
+  created_at: string
+  updated_at: string
 }

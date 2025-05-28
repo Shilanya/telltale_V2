@@ -100,8 +100,9 @@ export default function CharacterPage({ params }: { params: { id: string } }) {
             <h1 className="text-4xl font-bold mb-2">{character.name}</h1>
             <div className="mb-4">
               <p className="text-muted-foreground">
-                Created on {formatDate(character.createdAt)}
-                {character.updatedAt !== character.createdAt && ` • Updated on ${formatDate(character.updatedAt)}`}
+                Created on {formatDate(character.created_at || character.createdAt || "")}
+                {(character.updated_at || character.updatedAt) !== (character.created_at || character.createdAt) &&
+                  ` • Updated on ${formatDate(character.updated_at || character.updatedAt || "")}`}
               </p>
             </div>
 

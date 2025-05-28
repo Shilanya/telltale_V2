@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { PlusCircle, Trash2, MoveUp, MoveDown, Edit, Loader2 } from "lucide-react"
 import { generateId } from "@/lib/utils"
 import type { Chapter } from "@/lib/types"
@@ -114,71 +113,76 @@ export default function StoryChapters({ chapters, onChaptersChange }: StoryChapt
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-medium">Chapters</h3>
-        <Button onClick={handleAddChapter} size="sm">
+        <Button onClick={handleAddChapter} size="sm" type="button">
           <PlusCircle className="h-4 w-4 mr-2" />
           Add Chapter
         </Button>
       </div>
 
       {sortedChapters.length > 0 ? (
-        <Accordion type="single" collapsible className="w-full">
+        <div className="space-y-3">
           {sortedChapters.map((chapter, index) => (
-            <AccordionItem key={chapter.id} value={chapter.id}>
-              <AccordionTrigger className="hover:bg-muted/50 px-4 rounded-md">
-                <div className="flex items-center">
-                  <span className="mr-2 text-muted-foreground">#{index + 1}</span>
-                  {chapter.title || "Untitled Chapter"}
-                </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                <Card className="border-0 shadow-none">
-                  <CardContent className="p-4">
-                    <div className="prose prose-sm dark:prose-invert max-w-none line-clamp-3">
-                      {chapter.content ? (
-                        <p>{chapter.content}</p>
-                      ) : (
-                        <p className="text-muted-foreground italic">No content</p>
-                      )}
-                    </div>
-                  </CardContent>
-                  <CardFooter className="px-4 pb-4 pt-0 flex justify-end gap-2">
+            <Card key={chapter.id} className="w-full">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-base flex items-center">
+                    <span className="mr-2 text-muted-foreground text-sm">#{index + 1}</span>
+                    {chapter.title || "Untitled Chapter"}
+                  </CardTitle>
+                  <div className="flex gap-1">
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
+                      type="button"
                       onClick={() => handleMoveChapter(chapter.id, "up")}
                       disabled={index === 0}
+                      className="h-8 w-8 p-0"
                     >
                       <MoveUp className="h-4 w-4" />
                       <span className="sr-only">Move Up</span>
                     </Button>
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
+                      type="button"
                       onClick={() => handleMoveChapter(chapter.id, "down")}
                       disabled={index === sortedChapters.length - 1}
+                      className="h-8 w-8 p-0"
                     >
                       <MoveDown className="h-4 w-4" />
                       <span className="sr-only">Move Down</span>
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => handleEditChapter(chapter)}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      type="button"
+                      onClick={() => handleEditChapter(chapter)}
+                      className="h-8 w-8 p-0"
+                    >
                       <Edit className="h-4 w-4" />
                       <span className="sr-only">Edit</span>
                     </Button>
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
+                      type="button"
                       onClick={() => handleDeleteChapter(chapter.id)}
-                      className="text-destructive hover:text-destructive"
+                      className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                     >
                       <Trash2 className="h-4 w-4" />
                       <span className="sr-only">Delete</span>
                     </Button>
-                  </CardFooter>
-                </Card>
-              </AccordionContent>
-            </AccordionItem>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="text-xs text-muted-foreground">
+                  {chapter.content ? `${chapter.content.split(" ").length} words` : "No content"}
+                </div>
+              </CardContent>
+            </Card>
           ))}
-        </Accordion>
+        </div>
       ) : (
         <div className="text-center py-8 bg-muted/50 rounded-lg">
           <p className="text-muted-foreground">No chapters yet.</p>
@@ -215,10 +219,10 @@ export default function StoryChapters({ chapters, onChaptersChange }: StoryChapt
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddingChapter(false)} disabled={isSubmitting}>
+            <Button variant="outline" onClick={() => setIsAddingChapter(false)} disabled={isSubmitting} type="button">
               Cancel
             </Button>
-            <Button onClick={handleSaveChapter} disabled={isSubmitting}>
+            <Button onClick={handleSaveChapter} disabled={isSubmitting} type="button">
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Add Chapter
             </Button>
@@ -255,10 +259,10 @@ export default function StoryChapters({ chapters, onChaptersChange }: StoryChapt
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditingChapter(false)} disabled={isSubmitting}>
+            <Button variant="outline" onClick={() => setIsEditingChapter(false)} disabled={isSubmitting} type="button">
               Cancel
             </Button>
-            <Button onClick={handleSaveChapter} disabled={isSubmitting}>
+            <Button onClick={handleSaveChapter} disabled={isSubmitting} type="button">
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Update Chapter
             </Button>

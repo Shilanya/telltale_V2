@@ -1,80 +1,50 @@
-import { NextResponse } from "next/server"
-import fs from "fs"
-import path from "path"
-import type { Character } from "@/lib/types"
+import { type NextRequest, NextResponse } from "next/server"
+import { sql } from "@/lib/db"
 
-const DATA_DIR = path.join(process.cwd(), "data")
-const DATA_FILE = path.join(DATA_DIR, "characters.json")
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const userId = searchParams.get("user_id")
 
-// Ensure data directory exists
-function ensureDirectories() {
-  if (!fs.existsSync(DATA_DIR)) {
-    try {
-      fs.mkdirSync(DATA_DIR, { recursive: true })
-    } catch (error) {
-      console.error("Failed to create data directory:", error)
+    let characters
+    if (userId) {
+      characters = await sql`
+        SELECT * FROM characters 
+        WHERE user_id = ${userId}
+        ORDER BY created_at DESC
+      `
+    } else {
+      characters = await sql`
+        SELECT * FROM characters 
+        ORDER BY created_at DESC
+      `
     }
-  }
 
-  if (!fs.existsSync(DATA_FILE)) {
-    try {
-      fs.writeFileSync(DATA_FILE, JSON.stringify([]), "utf8")
-    } catch (error) {
-      console.error("Failed to create characters file:", error)
-    }
-  }
-}
-
-// Get all characters
-function getCharacters(): Character[] {
-  ensureDirectories()
-  try {
-    const data = fs.readFileSync(DATA_FILE, "utf8")
-    return JSON.parse(data)
-  } catch (error) {
-    console.error("Error reading characters:", error)
-    return []
-  }
-}
-
-// Save characters
-function saveCharacters(characters: Character[]): boolean {
-  ensureDirectories()
-  try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(characters, null, 2), "utf8")
-    return true
-  } catch (error) {
-    console.error("Error saving characters:", error)
-    return false
-  }
-}
-
-export async function GET() {
-  try {
-    const characters = getCharacters()
     return NextResponse.json(characters)
   } catch (error) {
-    console.error("Error in GET /api/characters:", error)
+    console.error("Error fetching characters:", error)
     return NextResponse.json({ error: "Failed to fetch characters" }, { status: 500 })
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const newCharacter = await request.json()
-    const characters = getCharacters()
+    const data = await request.json()
+    const { name, origin = "", birth_date = "", backstory = "", traits = [], image, user_id } = data
 
-    // Add the new character
-    characters.unshift(newCharacter)
-
-    // Save the updated characters
-    if (saveCharacters(characters)) {
-      return NextResponse.json(newCharacter, { status: 201 })
-    } else {
-      throw new Error("Failed to save character")
+    if (!name || !user_id) {
+      return NextResponse.json({ error: "Name and user_id are required" }, { status: 400 })
     }
+
+    const newCharacters = await sql`
+      INSERT INTO characters (name, origin, birth_date, backstory, traits, image, user_id)
+      VALUES (${name}, ${origin}, ${birth_date}, ${backstory}, ${traits}, ${image}, ${user_id})
+      RETURNING *
+    `
+
+    return NextResponse.json(newCharacters[0], { status: 201 })
   } catch (error) {
-    console.error("Error in POST /api/characters:", error)
+    console.error("Error creating character:", error)
     return NextResponse.json({ error: "Failed to create character" }, { status: 500 })
   }
 }

@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { ImagePlus, Loader2, Plus, X } from "lucide-react"
 import { useStore } from "@/lib/store"
-import { generateId } from "@/lib/utils"
 import type { Character } from "@/lib/types"
 import { useNotification, Notification } from "@/components/notification"
 
@@ -32,7 +31,7 @@ export default function CharacterForm({
   const { addCharacter, updateCharacter } = useStore()
   const [name, setName] = useState(character?.name || "")
   const [origin, setOrigin] = useState(character?.origin || "")
-  const [birthDate, setBirthDate] = useState(character?.birthDate || "")
+  const [birthDate, setBirthDate] = useState(character?.birth_date || "")
   const [backstory, setBackstory] = useState(character?.backstory || "")
   const [traits, setTraits] = useState<string[]>(character?.traits || [])
   const [newTrait, setNewTrait] = useState("")
@@ -92,39 +91,22 @@ export default function CharacterForm({
         })
       }
 
-      const now = new Date().toISOString()
+      const characterData = {
+        name,
+        origin,
+        birth_date: birthDate,
+        backstory,
+        traits,
+        image: imageUrl,
+      }
 
       if (character) {
         // Update existing character
-        const updatedCharacter: Character = {
-          ...character,
-          name,
-          origin,
-          birthDate,
-          backstory,
-          traits,
-          image: imageUrl,
-          updatedAt: now,
-        }
-
-        // Update in store
-        updateCharacter(character.id, updatedCharacter)
-
-        // Also try to update via API
-        try {
-          await fetch(`/api/characters/${character.id}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(updatedCharacter),
-          })
-        } catch (apiError) {
-          console.error("API update failed, but character was updated locally:", apiError)
-        }
-
+        await updateCharacter(character.id, characterData)
         showSuccess("Character updated successfully!")
 
         if (inDialog && onCharacterUpdated) {
-          onCharacterUpdated(updatedCharacter)
+          onCharacterUpdated({ ...character, ...characterData })
         } else {
           // Navigate to the character page
           setTimeout(() => {
@@ -133,35 +115,18 @@ export default function CharacterForm({
         }
       } else {
         // Create new character
-        const newCharacter: Character = {
-          id: generateId(),
-          name,
-          origin,
-          birthDate,
-          backstory,
-          traits,
-          image: imageUrl,
-          createdAt: now,
-          updatedAt: now,
-        }
-
-        // Add to store
-        addCharacter(newCharacter)
-
-        // Also try to create via API
-        try {
-          await fetch("/api/characters", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newCharacter),
-          })
-        } catch (apiError) {
-          console.error("API creation failed, but character was created locally:", apiError)
-        }
-
+        await addCharacter(characterData)
         showSuccess("Character created successfully!")
 
         if (inDialog && onCharacterCreated) {
+          // For dialog usage, we need to create a mock character object
+          const newCharacter = {
+            id: "temp-id", // This will be replaced by the actual ID from the database
+            ...characterData,
+            user_id: "temp-user-id",
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
           onCharacterCreated(newCharacter)
         } else {
           // Navigate to the characters page

@@ -3,233 +3,202 @@
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 import type { Story, Character } from "./types"
+import { useAuth } from "./auth"
 
 interface StoreContextType {
   // Stories
   stories: Story[]
-  addStory: (story: Story) => void
-  updateStory: (id: string, updatedStory: Story) => void
-  removeStory: (id: string) => void
+  addStory: (story: Omit<Story, "id" | "created_at" | "updated_at" | "user_id">) => Promise<void>
+  updateStory: (id: string, updatedStory: Omit<Story, "id" | "created_at" | "updated_at" | "user_id">) => Promise<void>
+  removeStory: (id: string) => Promise<void>
   getStory: (id: string) => Story | undefined
 
   // Characters
   characters: Character[]
-  addCharacter: (character: Character) => void
-  updateCharacter: (id: string, updatedCharacter: Character) => void
-  removeCharacter: (id: string) => void
+  addCharacter: (character: Omit<Character, "id" | "created_at" | "updated_at" | "user_id">) => Promise<void>
+  updateCharacter: (
+    id: string,
+    updatedCharacter: Omit<Character, "id" | "created_at" | "updated_at" | "user_id">,
+  ) => Promise<void>
+  removeCharacter: (id: string) => Promise<void>
   getCharacter: (id: string) => Character | undefined
 
   loading: boolean
+  refreshData: () => Promise<void>
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined)
 
-// Keys for localStorage
-const STORIES_STORAGE_KEY = "tell-tale-stories"
-const CHARACTERS_STORAGE_KEY = "tell-tale-characters"
-
 export function StoreProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
   const [stories, setStories] = useState<Story[]>([])
   const [characters, setCharacters] = useState<Character[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Load stories and characters from localStorage on mount
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        // Load stories
-        const storedStories = localStorage.getItem(STORIES_STORAGE_KEY)
-        if (storedStories) {
-          try {
-            const parsedStories = JSON.parse(storedStories)
-            // Ensure all stories have the required fields
-            const validStories = parsedStories.map((story: any) => ({
-              ...story,
-              characters: story.characters || [],
-              chapters: story.chapters || [],
-              description: story.description || "",
-            }))
-            setStories(validStories)
-          } catch (e) {
-            console.error("Error parsing stored stories:", e)
-          }
-        }
+  // Load data from API
+  const refreshData = async () => {
+    if (!user) {
+      setStories([])
+      setCharacters([])
+      setLoading(false)
+      return
+    }
 
-        // Load characters
-        const storedCharacters = localStorage.getItem(CHARACTERS_STORAGE_KEY)
-        if (storedCharacters) {
-          try {
-            const parsedCharacters = JSON.parse(storedCharacters)
-            setCharacters(parsedCharacters)
-          } catch (e) {
-            console.error("Error parsing stored characters:", e)
-          }
-        }
+    try {
+      setLoading(true)
 
-        // Fetch stories from API
-        try {
-          const storiesResponse = await fetch("/api/stories")
-          if (storiesResponse.ok) {
-            const apiStories = await storiesResponse.json()
-            if (Array.isArray(apiStories) && apiStories.length > 0) {
-              // Ensure all API stories have the required fields
-              const validApiStories = apiStories.map((story: any) => ({
-                ...story,
-                characters: story.characters || [],
-                chapters: story.chapters || [],
-                description: story.description || "",
-              }))
-
-              // Merge with localStorage stories
-              const storyMap = new Map()
-              if (storedStories) {
-                try {
-                  const parsedStories = JSON.parse(storedStories)
-                  parsedStories.forEach((story: Story) => {
-                    storyMap.set(story.id, {
-                      ...story,
-                      characters: story.characters || [],
-                      chapters: story.chapters || [],
-                      description: story.description || "",
-                    })
-                  })
-                } catch (e) {
-                  console.error("Error parsing stored stories during merge:", e)
-                }
-              }
-
-              validApiStories.forEach((story: Story) => {
-                storyMap.set(story.id, story)
-              })
-
-              const mergedStories = Array.from(storyMap.values())
-              setStories(mergedStories)
-              localStorage.setItem(STORIES_STORAGE_KEY, JSON.stringify(mergedStories))
-            }
-          }
-        } catch (error) {
-          console.error("Error fetching stories from API:", error)
-        }
-
-        // Fetch characters from API
-        try {
-          const charactersResponse = await fetch("/api/characters")
-          if (charactersResponse.ok) {
-            const apiCharacters = await charactersResponse.json()
-            if (Array.isArray(apiCharacters) && apiCharacters.length > 0) {
-              // Merge with localStorage characters
-              const characterMap = new Map()
-              if (storedCharacters) {
-                try {
-                  const parsedCharacters = JSON.parse(storedCharacters)
-                  parsedCharacters.forEach((character: Character) => {
-                    characterMap.set(character.id, character)
-                  })
-                } catch (e) {
-                  console.error("Error parsing stored characters during merge:", e)
-                }
-              }
-
-              apiCharacters.forEach((character: Character) => {
-                characterMap.set(character.id, character)
-              })
-
-              const mergedCharacters = Array.from(characterMap.values())
-              setCharacters(mergedCharacters)
-              localStorage.setItem(CHARACTERS_STORAGE_KEY, JSON.stringify(mergedCharacters))
-            }
-          }
-        } catch (error) {
-          console.error("Error fetching characters from API:", error)
-        }
-      } catch (error) {
-        console.error("Failed to load data:", error)
-      } finally {
-        setLoading(false)
+      // Fetch stories
+      const storiesResponse = await fetch(`/api/stories?user_id=${user.id}`)
+      if (storiesResponse.ok) {
+        const storiesData = await storiesResponse.json()
+        // Map database field names to camelCase for components
+        const mappedStories = storiesData.map((story: any) => ({
+          ...story,
+          createdAt: story.created_at,
+          updatedAt: story.updated_at,
+          coverImage: story.cover_image,
+        }))
+        setStories(mappedStories)
       }
+
+      // Fetch characters
+      const charactersResponse = await fetch(`/api/characters?user_id=${user.id}`)
+      if (charactersResponse.ok) {
+        const charactersData = await charactersResponse.json()
+        // Map database field names to camelCase for components
+        const mappedCharacters = charactersData.map((character: any) => ({
+          ...character,
+          createdAt: character.created_at,
+          updatedAt: character.updated_at,
+          birthDate: character.birth_date,
+        }))
+        setCharacters(mappedCharacters)
+      }
+    } catch (error) {
+      console.error("Error loading data:", error)
+    } finally {
+      setLoading(false)
     }
+  }
 
-    loadData()
-  }, [])
-
-  // Save stories to localStorage whenever they change
+  // Load data when user changes
   useEffect(() => {
-    if (stories.length > 0) {
-      // Ensure all stories have the required fields before saving
-      const validStories = stories.map((story) => ({
-        ...story,
-        characters: story.characters || [],
-        chapters: story.chapters || [],
-        description: story.description || "",
-      }))
-
-      localStorage.setItem(STORIES_STORAGE_KEY, JSON.stringify(validStories))
-    }
-  }, [stories])
-
-  // Save characters to localStorage whenever they change
-  useEffect(() => {
-    if (characters.length > 0) {
-      localStorage.setItem(CHARACTERS_STORAGE_KEY, JSON.stringify(characters))
-    }
-  }, [characters])
+    refreshData()
+  }, [user])
 
   // Story methods
-  const addStory = (story: Story) => {
-    // Ensure the story has all required fields
-    const storyWithRequiredFields = {
-      ...story,
-      characters: story.characters || [],
-      chapters: story.chapters || [],
-      description: story.description || "",
-    }
+  const addStory = async (storyData: Omit<Story, "id" | "created_at" | "updated_at" | "user_id">) => {
+    if (!user) return
 
-    setStories((prevStories) => [storyWithRequiredFields, ...prevStories])
+    try {
+      const response = await fetch("/api/stories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...storyData, user_id: user.id }),
+      })
+
+      if (response.ok) {
+        const newStory = await response.json()
+        setStories((prev) => [newStory, ...prev])
+      }
+    } catch (error) {
+      console.error("Error creating story:", error)
+      throw error
+    }
   }
 
-  const updateStory = (id: string, updatedStory: Story) => {
-    // Ensure the updated story has all required fields
-    const storyWithRequiredFields = {
-      ...updatedStory,
-      characters: updatedStory.characters || [],
-      chapters: updatedStory.chapters || [],
-      description: updatedStory.description || "",
-    }
+  const updateStory = async (id: string, storyData: Omit<Story, "id" | "created_at" | "updated_at" | "user_id">) => {
+    try {
+      const response = await fetch(`/api/stories/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(storyData),
+      })
 
-    setStories((prevStories) => prevStories.map((story) => (story.id === id ? storyWithRequiredFields : story)))
+      if (response.ok) {
+        const updatedStory = await response.json()
+        setStories((prev) => prev.map((story) => (story.id === id ? updatedStory : story)))
+      }
+    } catch (error) {
+      console.error("Error updating story:", error)
+      throw error
+    }
   }
 
-  const removeStory = (id: string) => {
-    setStories((prevStories) => prevStories.filter((story) => story.id !== id))
+  const removeStory = async (id: string) => {
+    try {
+      const response = await fetch(`/api/stories/${id}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        setStories((prev) => prev.filter((story) => story.id !== id))
+      }
+    } catch (error) {
+      console.error("Error deleting story:", error)
+      throw error
+    }
   }
 
   const getStory = (id: string) => {
-    const story = stories.find((story) => story.id === id)
-    if (story) {
-      // Ensure the story has all required fields
-      return {
-        ...story,
-        characters: story.characters || [],
-        chapters: story.chapters || [],
-        description: story.description || "",
-      }
-    }
-    return undefined
+    return stories.find((story) => story.id === id)
   }
 
   // Character methods
-  const addCharacter = (character: Character) => {
-    setCharacters((prevCharacters) => [character, ...prevCharacters])
+  const addCharacter = async (characterData: Omit<Character, "id" | "created_at" | "updated_at" | "user_id">) => {
+    if (!user) return
+
+    try {
+      const response = await fetch("/api/characters", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...characterData, user_id: user.id }),
+      })
+
+      if (response.ok) {
+        const newCharacter = await response.json()
+        setCharacters((prev) => [newCharacter, ...prev])
+      }
+    } catch (error) {
+      console.error("Error creating character:", error)
+      throw error
+    }
   }
 
-  const updateCharacter = (id: string, updatedCharacter: Character) => {
-    setCharacters((prevCharacters) =>
-      prevCharacters.map((character) => (character.id === id ? updatedCharacter : character)),
-    )
+  const updateCharacter = async (
+    id: string,
+    characterData: Omit<Character, "id" | "created_at" | "updated_at" | "user_id">,
+  ) => {
+    try {
+      const response = await fetch(`/api/characters/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(characterData),
+      })
+
+      if (response.ok) {
+        const updatedCharacter = await response.json()
+        setCharacters((prev) => prev.map((character) => (character.id === id ? updatedCharacter : character)))
+      }
+    } catch (error) {
+      console.error("Error updating character:", error)
+      throw error
+    }
   }
 
-  const removeCharacter = (id: string) => {
-    setCharacters((prevCharacters) => prevCharacters.filter((character) => character.id !== id))
+  const removeCharacter = async (id: string) => {
+    try {
+      const response = await fetch(`/api/characters/${id}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        setCharacters((prev) => prev.filter((character) => character.id !== id))
+      }
+    } catch (error) {
+      console.error("Error deleting character:", error)
+      throw error
+    }
   }
 
   const getCharacter = (id: string) => {
@@ -250,6 +219,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         removeCharacter,
         getCharacter,
         loading,
+        refreshData,
       }}
     >
       {children}

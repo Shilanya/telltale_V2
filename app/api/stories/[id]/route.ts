@@ -1,151 +1,141 @@
-import { NextResponse } from "next/server"
-import fs from "fs"
-import path from "path"
-import type { Story } from "@/lib/types"
+import { type NextRequest, NextResponse } from "next/server"
+import { sql } from "@/lib/db"
+import { generateExcerpt } from "@/lib/utils"
 
-const DATA_DIR = path.join(process.cwd(), "data")
-const DATA_FILE = path.join(DATA_DIR, "stories.json")
-
-// Ensure data directory exists
-function ensureDirectories() {
-  if (!fs.existsSync(DATA_DIR)) {
-    try {
-      fs.mkdirSync(DATA_DIR, { recursive: true })
-    } catch (error) {
-      console.error("Failed to create data directory:", error)
-    }
-  }
-
-  if (!fs.existsSync(DATA_FILE)) {
-    try {
-      fs.writeFileSync(DATA_FILE, JSON.stringify([]), "utf8")
-    } catch (error) {
-      console.error("Failed to create stories file:", error)
-    }
-  }
-}
-
-// Get all stories
-function getStories(): Story[] {
-  ensureDirectories()
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const data = fs.readFileSync(DATA_FILE, "utf8")
-    const stories = JSON.parse(data)
+    const stories = await sql`
+      SELECT s.*, 
+             COALESCE(
+               json_agg(
+                 json_build_object(
+                   'id', c.id,
+                   'title', c.title,
+                   'content', c.content,
+                   'order', c."order",
+                   'created_at', c.created_at,
+                   'updated_at', c.updated_at
+                 ) ORDER BY c."order"
+               ) FILTER (WHERE c.id IS NOT NULL), 
+               '[]'
+             ) as chapters,
+             COALESCE(
+               json_agg(DISTINCT sc.character_id) FILTER (WHERE sc.character_id IS NOT NULL),
+               '[]'
+             ) as characters
+      FROM stories s
+      LEFT JOIN chapters c ON s.id = c.story_id
+      LEFT JOIN story_characters sc ON s.id = sc.story_id
+      WHERE s.id = ${params.id}
+      GROUP BY s.id
+    `
 
-    // Ensure all stories have the required fields
-    return stories.map((story: any) => ({
-      ...story,
-      characters: story.characters || [],
-      chapters: story.chapters || [],
-      description: story.description || "",
-    }))
-  } catch (error) {
-    console.error("Error reading stories:", error)
-    return []
-  }
-}
-
-// Get a story by ID
-function getStoryById(id: string): Story | undefined {
-  const stories = getStories()
-  const story = stories.find((story) => story.id === id)
-
-  if (story) {
-    // Ensure the story has all required fields
-    return {
-      ...story,
-      characters: story.characters || [],
-      chapters: story.chapters || [],
-      description: story.description || "",
-    }
-  }
-
-  return undefined
-}
-
-// Save stories
-function saveStories(stories: Story[]): boolean {
-  ensureDirectories()
-  try {
-    // Ensure all stories have the required fields before saving
-    const validStories = stories.map((story) => ({
-      ...story,
-      characters: story.characters || [],
-      chapters: story.chapters || [],
-      description: story.description || "",
-    }))
-
-    fs.writeFileSync(DATA_FILE, JSON.stringify(validStories, null, 2), "utf8")
-    return true
-  } catch (error) {
-    console.error("Error saving stories:", error)
-    return false
-  }
-}
-
-export async function GET(request: Request, { params }: { params: { id: string } }) {
-  try {
-    const story = getStoryById(params.id)
-
-    if (!story) {
+    if (stories.length === 0) {
       return NextResponse.json({ error: "Story not found" }, { status: 404 })
     }
 
-    return NextResponse.json(story)
+    return NextResponse.json(stories[0])
   } catch (error) {
-    console.error("Error in GET /api/stories/[id]:", error)
+    console.error("Error fetching story:", error)
     return NextResponse.json({ error: "Failed to fetch story" }, { status: 500 })
   }
 }
 
-export async function PUT(request: Request, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const updatedStory = await request.json()
-    const stories = getStories()
-    const index = stories.findIndex((story) => story.id === params.id)
+    const data = await request.json()
+    const { title, description = "", content = "", cover_image, chapters = [], characters = [] } = data
 
-    if (index === -1) {
-      return NextResponse.json({ error: "Story not found" }, { status: 404 })
+    if (!title) {
+      return NextResponse.json({ error: "Title is required" }, { status: 400 })
     }
 
-    // Update the story, ensuring all required fields exist
-    stories[index] = {
-      ...stories[index],
-      ...updatedStory,
-      characters: updatedStory.characters || [],
-      chapters: updatedStory.chapters || [],
-      description: updatedStory.description || "",
+    const excerpt = generateExcerpt(description || content)
+
+    // Update story
+    await sql`
+      UPDATE stories 
+      SET title = ${title}, 
+          description = ${description}, 
+          content = ${content}, 
+          excerpt = ${excerpt}, 
+          cover_image = ${cover_image},
+          updated_at = NOW()
+      WHERE id = ${params.id}
+    `
+
+    // Delete existing chapters
+    await sql`DELETE FROM chapters WHERE story_id = ${params.id}`
+
+    // Add new chapters
+    if (chapters.length > 0) {
+      for (const chapter of chapters) {
+        await sql`
+          INSERT INTO chapters (title, content, "order", story_id)
+          VALUES (${chapter.title}, ${chapter.content}, ${chapter.order}, ${params.id})
+        `
+      }
     }
 
-    // Save the updated stories
-    if (saveStories(stories)) {
-      return NextResponse.json(stories[index])
-    } else {
-      throw new Error("Failed to save story")
+    // Delete existing character associations
+    await sql`DELETE FROM story_characters WHERE story_id = ${params.id}`
+
+    // Add new character associations
+    if (characters.length > 0) {
+      for (const characterId of characters) {
+        await sql`
+          INSERT INTO story_characters (story_id, character_id)
+          VALUES (${params.id}, ${characterId})
+          ON CONFLICT DO NOTHING
+        `
+      }
     }
+
+    // Fetch the updated story
+    const updatedStories = await sql`
+      SELECT s.*, 
+             COALESCE(
+               json_agg(
+                 json_build_object(
+                   'id', c.id,
+                   'title', c.title,
+                   'content', c.content,
+                   'order', c."order",
+                   'created_at', c.created_at,
+                   'updated_at', c.updated_at
+                 ) ORDER BY c."order"
+               ) FILTER (WHERE c.id IS NOT NULL), 
+               '[]'
+             ) as chapters,
+             COALESCE(
+               json_agg(DISTINCT sc.character_id) FILTER (WHERE sc.character_id IS NOT NULL),
+               '[]'
+             ) as characters
+      FROM stories s
+      LEFT JOIN chapters c ON s.id = c.story_id
+      LEFT JOIN story_characters sc ON s.id = sc.story_id
+      WHERE s.id = ${params.id}
+      GROUP BY s.id
+    `
+
+    return NextResponse.json(updatedStories[0])
   } catch (error) {
-    console.error("Error in PUT /api/stories/[id]:", error)
+    console.error("Error updating story:", error)
     return NextResponse.json({ error: "Failed to update story" }, { status: 500 })
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const stories = getStories()
-    const filteredStories = stories.filter((story) => story.id !== params.id)
+    const result = await sql`DELETE FROM stories WHERE id = ${params.id}`
 
-    if (filteredStories.length === stories.length) {
+    if (result.length === 0) {
       return NextResponse.json({ error: "Story not found" }, { status: 404 })
     }
 
-    // Save the updated stories
-    if (saveStories(filteredStories)) {
-      return NextResponse.json({ success: true })
-    } else {
-      throw new Error("Failed to delete story")
-    }
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Error in DELETE /api/stories/[id]:", error)
+    console.error("Error deleting story:", error)
     return NextResponse.json({ error: "Failed to delete story" }, { status: 500 })
   }
 }

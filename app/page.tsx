@@ -5,14 +5,19 @@ import { Button } from "@/components/ui/button"
 import { PlusCircle, Users } from "lucide-react"
 import StoryList from "@/components/story-list"
 import { useStore } from "@/lib/store"
+import { useAuth } from "@/lib/auth"
 
 export default function Home() {
   const { stories, loading } = useStore()
+  const { user } = useAuth()
 
   return (
     <main className="container mx-auto py-8 px-4">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Tell-Tale</h1>
+        <div>
+          <h1 className="text-3xl font-bold">Tell-Tale</h1>
+          <p className="text-muted-foreground mt-1">Welcome back, {user?.name}! Ready to share your stories?</p>
+        </div>
         <div className="flex gap-2">
           <Link href="/characters">
             <Button variant="outline">

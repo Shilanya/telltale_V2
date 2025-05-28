@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ImagePlus, Loader2 } from "lucide-react"
 import { useStore } from "@/lib/store"
-import { generateId, generateExcerpt } from "@/lib/utils"
+import { generateExcerpt } from "@/lib/utils"
 import type { Story, Chapter } from "@/lib/types"
 import { useNotification, Notification } from "@/components/notification"
 import StoryCharacters from "@/components/story-characters"
@@ -72,8 +72,6 @@ export default function StoryForm({ story }: { story?: Story }) {
         })
       }
 
-      const now = new Date().toISOString()
-
       // Use content from chapters if available, otherwise use the main content
       const finalContent =
         chapters.length > 0
@@ -83,34 +81,19 @@ export default function StoryForm({ story }: { story?: Story }) {
               .join("\n\n")
           : content
 
+      const storyData = {
+        title,
+        description,
+        content: finalContent,
+        excerpt: generateExcerpt(description || finalContent),
+        cover_image: imageUrl,
+        characters: characterIds,
+        chapters,
+      }
+
       if (story) {
         // Update existing story
-        const updatedStory: Story = {
-          ...story,
-          title,
-          description,
-          content: finalContent,
-          excerpt: generateExcerpt(description || finalContent),
-          coverImage: imageUrl,
-          characters: characterIds,
-          chapters,
-          updatedAt: now,
-        }
-
-        // Update in store
-        updateStoreStory(story.id, updatedStory)
-
-        // Also try to update via API
-        try {
-          await fetch(`/api/stories/${story.id}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(updatedStory),
-          })
-        } catch (apiError) {
-          console.error("API update failed, but story was updated locally:", apiError)
-        }
-
+        await updateStoreStory(story.id, storyData)
         showSuccess("Story updated successfully!")
 
         // Navigate to the story page
@@ -119,36 +102,10 @@ export default function StoryForm({ story }: { story?: Story }) {
         }, 500)
       } else {
         // Create new story
-        const newStory: Story = {
-          id: generateId(),
-          title,
-          description,
-          content: finalContent,
-          excerpt: generateExcerpt(description || finalContent),
-          coverImage: imageUrl,
-          characters: characterIds,
-          chapters,
-          createdAt: now,
-          updatedAt: now,
-        }
-
-        // Add to store
-        addStory(newStory)
-
-        // Also try to create via API
-        try {
-          await fetch("/api/stories", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(newStory),
-          })
-        } catch (apiError) {
-          console.error("API creation failed, but story was created locally:", apiError)
-        }
-
+        await addStory(storyData)
         showSuccess("Story created successfully!")
 
-        // Navigate to the homepage after a short delay to allow the store to update
+        // Navigate to the homepage after a short delay
         setTimeout(() => {
           router.push("/")
         }, 500)
@@ -223,9 +180,15 @@ export default function StoryForm({ story }: { story?: Story }) {
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="content">Story Content</TabsTrigger>
-              <TabsTrigger value="chapters">Chapters</TabsTrigger>
-              <TabsTrigger value="characters">Characters</TabsTrigger>
+              <TabsTrigger value="content" type="button">
+                Story Content
+              </TabsTrigger>
+              <TabsTrigger value="chapters" type="button">
+                Chapters
+              </TabsTrigger>
+              <TabsTrigger value="characters" type="button">
+                Characters
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="content" className="pt-4">
